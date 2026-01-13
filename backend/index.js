@@ -1,6 +1,7 @@
 const db = require("./db")
 const express = require("express")
 const cors = require("cors")
+const csrf = require("csurf")
 const bcrypt = require("bcrypt")
 const cookieParser = require("cookie-parser")
 const session = require("express-session")
@@ -33,17 +34,30 @@ app.use(session({
     }
 }))
 
+const csrfMiddleware = csrf({
+    cookie: {
+        httpOnly: false,
+        sameSite: "none",
+        secure: true
+    }
+})
+
 app.get("/auth/me", (req, res) => {
-    console.log(req.session)
+    const { clicks } = db.prepare(
+        "SELECT clicks FROM users WHERE id = ?"
+    ).get(req.session.userId)
+
     if (req.session.userId) {
-        return res.status(200).json({logged: true, user: {
-            userId: req.session.userId,
-            email: req.session.email,
-            clicks: req.session.clicks || 0
-        }})
+        return res.status(200).json({
+            logged: true, user: {
+                userId: req.session.userId,
+                email: req.session.email,
+                clicks: clicks || 0
+            }
+        })
     }
 
-    return res.status(401).json({logged: false})
+    return res.status(401).json({ logged: false })
 })
 
 app.post("/auth/signup", (req, res) => {
@@ -72,12 +86,12 @@ app.post("/auth/signin", (req, res) => {
     const user = db
         .prepare(`SELECT * FROM users WHERE email = ?`)
         .get(email)
-    if (!user) 
+    if (!user)
         res
             .status(401)
             .json({ error: "Неправильные данные" })
     const validPassword = bcrypt.compareSync(password, user.password)
-    if (!validPassword) 
+    if (!validPassword)
         res
             .status(401)
             .json({ error: "Неправильные данные" })
@@ -91,20 +105,39 @@ app.post("/auth/signin", (req, res) => {
 
 app.post("/auth/logout", (req, res) => {
     req.session.destroy((err) => {
-        err && res.status(500).json({error: "Не получилось выйти"})
+        err && res.status(500).json({ error: "Не получилось выйти" })
         res.clearCookie("sessionId")
-        res.status(200).json({message: "Выход успешен"})
+        res.status(200).json({ message: "Выход успешен" })
     })
 })
 
-app.post("/click", (req, res) => {
+app.post("/click", csrfMiddleware, (req, res) => {
     const { clicks } = req.body
     const updateClicks = db
         .prepare("UPDATE users SET clicks = ? WHERE id = ?")
         .run(clicks, req.session.userId)
 
     console.log(updateClicks)
-    res.status(200).json({message: "Значение кликов обновлено"})
+    res.status(200).json({ message: "Значение кликов обновлено" })
+})
+
+
+
+app.get("/leaderboard", (req, res) => {
+    const users = db.prepare(
+        "SELECT * FROM users ORDER BY clicks DESC LIMIT 10"
+    ).all()
+
+    const sanitiziedUsers = users.map((el) => {
+        const { createdAt, password, ...newUser } = el
+        return newUser
+    })
+
+    res.status(200).json(users)
+})
+
+app.get("/csrf-token", csrfMiddleware, (req,res) => {
+    res.json({token: req.csrfToken()})
 })
 
 app.listen("3000", () => {

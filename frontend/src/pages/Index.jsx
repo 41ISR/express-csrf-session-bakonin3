@@ -9,7 +9,8 @@ import Leaderboard from "../components/Leaderboard"
 const Index = () => {
     const navigate = useNavigate()
     const formRef = useRef(null)
-    const { user, getCsrfToken, csrfToken } = useAuthStore()
+    const { user, getCsrfToken
+     } = useAuthStore()
     const { currentClicks, setCurrentClicks } = useAppStore()
     // const [clicks, setClicks] = useState(0)
     // const clickRef = useRef(null)

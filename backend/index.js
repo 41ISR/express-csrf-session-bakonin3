@@ -16,7 +16,7 @@ app.use(cors({
     origin: true, // ТОЛЬКО ДЛЯ CODESPACES
     credentials: true,
     methods: ["GET", "POST", "DELETE", "PUT", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
     exposedHeaders: ["set-cookie"]
 }))
 app.use(session({
@@ -38,7 +38,8 @@ const csrfMiddleware = csrf({
     cookie: {
         httpOnly: false,
         sameSite: "none",
-        secure: true
+        secure: true,
+        domain: undefined
     }
 })
 
@@ -77,30 +78,35 @@ app.post("/auth/signup", (req, res) => {
         res.status(201).json(createdUser)
     } catch (error) {
         console.error(error)
-        res.status(400).json(error)
+        res.status(400).json(error.code)
     }
 })
 
 app.post("/auth/signin", (req, res) => {
-    const { email, password } = req.body
-    const user = db
-        .prepare(`SELECT * FROM users WHERE email = ?`)
-        .get(email)
-    if (!user)
-        res
-            .status(401)
-            .json({ error: "Неправильные данные" })
-    const validPassword = bcrypt.compareSync(password, user.password)
-    if (!validPassword)
-        res
-            .status(401)
-            .json({ error: "Неправильные данные" })
+    try {
+        const { email, password } = req.body
+        const user = db
+            .prepare(`SELECT * FROM users WHERE email = ?`)
+            .get(email)
+        if (!user)
+            res
+                .status(401)
+                .json({ error: "Неправильные данные" })
+        const validPassword = bcrypt.compareSync(password, user.password)
+        if (!validPassword)
+            res
+                .status(401)
+                .json({ error: "Неправильные данные" })
 
-    req.session.email = user.email
-    req.session.userId = user.id
-    req.session.clicks = user.clicks
+        req.session.email = user.email
+        req.session.userId = user.id
+        req.session.clicks = user.clicks
 
-    res.status(200).json(user)
+        res.status(200).json(user)
+    } catch (error) {
+        console.error(error)
+        res.status(400).json(error.code)
+    }
 })
 
 app.post("/auth/logout", (req, res) => {
@@ -112,6 +118,8 @@ app.post("/auth/logout", (req, res) => {
 })
 
 app.post("/click", csrfMiddleware, (req, res) => {
+    console.log(req)
+    try {
     const { clicks } = req.body
     const updateClicks = db
         .prepare("UPDATE users SET clicks = ? WHERE id = ?")
@@ -119,11 +127,14 @@ app.post("/click", csrfMiddleware, (req, res) => {
 
     console.log(updateClicks)
     res.status(200).json({ message: "Значение кликов обновлено" })
+}catch(error){
+    console.error(error)
+}
 })
 
 
 
-app.get("/leaderboard", (req, res) => {
+app.get("/leaderboard", (_, res) => {
     const users = db.prepare(
         "SELECT * FROM users ORDER BY clicks DESC LIMIT 10"
     ).all()
@@ -133,11 +144,13 @@ app.get("/leaderboard", (req, res) => {
         return newUser
     })
 
-    res.status(200).json(users)
+    res.status(200).json(sanitiziedUsers)
 })
 
-app.get("/csrf-token", csrfMiddleware, (req,res) => {
-    res.json({token: req.csrfToken()})
+app.get("/csrf-token", csrfMiddleware, (req, res) => {
+    console.log(req.csrfToken());
+    
+    res.json({ token: req.csrfToken() })
 })
 
 app.listen("3000", () => {

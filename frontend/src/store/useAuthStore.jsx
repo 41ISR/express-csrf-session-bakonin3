@@ -20,10 +20,10 @@ export const useAuthStore = create((set, get) => ({
         }
     },
     clearUser: () => {
-        set((state) => ({...state, user: undefined}))
+        set((state) => ({ ...state, user: undefined }))
     },
     csrfToken: undefined,
-getCsrfToken: async () => {
+    getCsrfToken: async () => {
         try {
             const res = await fetch("https://improved-train-g7jjg65vw5rfvwgg-3000.app.github.dev/csrf-token")
 
@@ -32,7 +32,7 @@ getCsrfToken: async () => {
             const data = await res.json()
 
             if (data && data.token) {
-                set((state) => ({...state, csrfToken: data.token }))
+                set((state) => ({ ...state, csrfToken: data.token }))
             }
         } catch (error) {
             console.error(error)
